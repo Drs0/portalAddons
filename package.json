@@ -1,0 +1,16 @@
+{
+  "name": "portal-match",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "sass:compile": "sass --no-source-map assets/scss:assets/stylesheets"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "dependencies": {
+    "sass": "^1.91.0"
+  }
+}

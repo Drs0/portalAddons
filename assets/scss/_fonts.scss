@@ -1,0 +1,5 @@
+@use 'variables';
+@font-face {
+    font-family: 'roboto-regular';
+    src: url(variables.$robotoRegular);
+}
