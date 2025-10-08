@@ -21,6 +21,10 @@ if(!defined('PLUGIN_TEMPLATE_PATH')){
     define('PLUGIN_TEMPLATE_PATH', PLUGIN_PATH . 'templates/');
 }
 
+if(!defined('MATCHES_TOKEN')){
+    define('MATCHES_TOKEN','');
+}
+
 function portalAddonsLoadTextdomain() {
     load_plugin_textdomain('portal-addons', false, dirname(plugin_basename(__FILE__)) . '/languages');
 }
