@@ -17,7 +17,7 @@ class PostTypeRegistrar {
      *      ]
      */
     public static function register(array $postTypes = []) {
-        self::$postTypes = $postTypes;
+        self::$postTypes = array_merge(self::$postTypes ?? [], $postTypes);
         add_action('init', [__CLASS__, 'registerAll']);
     }
 
