@@ -1,4 +1,6 @@
 <?php
+namespace PortalAddons\Core\postTypes;
+
 use PortalAddons\Core\PostTypeRegistrar;
 
 PostTypeRegistrar::register([
@@ -28,183 +30,256 @@ PostTypeRegistrar::register([
     ],
 ]);
 
-add_action('add_meta_boxes', function () {
-    add_meta_box('carDetailsBox', 'Car Details', function ($post) {
-        $price       = get_post_meta($post->ID, 'price', true);
-        $year        = get_post_meta($post->ID, 'year', true);
-        $mileage     = get_post_meta($post->ID, 'mileage', true);
-        $engine      = get_post_meta($post->ID, 'engine', true);
-        $loan_amount = get_post_meta($post->ID, 'loan_amount', true);
-        $isLoaned    = get_post_meta($post->ID, 'isLoaned', true);
-        ?>
-        <label>Price: <input type="number" name="price" value="<?= esc_attr($price) ?>"></label><br>
-        <label>Year: <input type="number" name="year" value="<?= esc_attr($year) ?>"></label><br>
-        <label>Mileage: <input type="number" name="mileage" value="<?= esc_attr($mileage) ?>"></label><br>
-        <label>Engine: <input type="text" name="engine" value="<?= esc_attr($engine) ?>"></label><br>
-        <label>Loan Amount: <input type="number" name="loan_amount" value="<?= esc_attr($loan_amount) ?>"></label><br>
-        <label><input type="checkbox" name="isLoaned" value="1" <?= checked($isLoaned, true, false) ?>> Loaned</label>
-        <?php
-    }, 'car', 'normal', 'default');
-});
+class CarLoanManager {
+    private static $instance;
 
-add_action('save_post_car', function ($post_id) {
-    if (array_key_exists('price', $_POST)) update_post_meta($post_id, 'price', $_POST['price']);
-    if (array_key_exists('year', $_POST)) update_post_meta($post_id, 'year', $_POST['year']);
-    if (array_key_exists('mileage', $_POST)) update_post_meta($post_id, 'mileage', $_POST['mileage']);
-    if (array_key_exists('engine', $_POST)) update_post_meta($post_id, 'engine', $_POST['engine']);
-    if (array_key_exists('loan_amount', $_POST)) update_post_meta($post_id, 'loan_amount', $_POST['loan_amount']);
-    update_post_meta($post_id, 'isLoaned', isset($_POST['isLoaned']));
-});
-
-function getCarDetails($carId) {
-    $fields = ['price', 'year', 'mileage', 'engine', 'loan_amount', 'isLoaned'];
-    $fields = apply_filters('carDetailFields', $fields);
-    $meta   = [];
-
-    foreach ($fields as $field) {
-        $meta[$field] = get_post_meta($carId, $field, true);
+    public function __construct() {
+        add_action('init', [$this, 'registerRewriteLoanRule']);
+        add_action('add_meta_boxes', [$this, 'registerMetaBoxes']);
+        add_action('save_post_car', [$this, 'saveCarMeta']);
+        add_action('save_post_loan_request', [$this, 'saveLoanRequestMeta']);
+        add_action('template_redirect', [$this, 'handleLoanFormSubmission']);
+        add_filter('query_vars', [$this, 'addQueryVars']);
+        add_filter('the_content', [$this, 'displayLoanButton']);
+        add_filter('manage_loan_request_posts_columns', [$this, 'addLoanRequestColumns']);
+        add_action('manage_loan_request_posts_custom_column', [$this, 'renderLoanRequestColumns'], 10, 2);
+        add_action('admin_post_update_loan_request_status', [$this, 'handleLoanStatusAction']);
     }
 
-    $meta['title']     = get_the_title($carId);
-    $meta['permalink'] = get_permalink($carId);
+    public static function instance() {
+        if (!self::$instance) {
+            self::$instance = new self();
+        }
+        return self::$instance;
+    }
 
-    $meta = apply_filters('carDetailsMeta', $meta, $carId);
-    return $meta;
-}
+    public function registerRewriteLoanRule() {
+        add_rewrite_rule('^loan-car/([0-9]+)/?$', 'index.php?loan_car_id=$matches[1]', 'top');
+    }
 
-add_action('init', function () {
-    add_rewrite_rule('^loan-car/([0-9]+)/?$', 'index.php?loan_car_id=$matches[1]', 'top');
-});
-add_filter('query_vars', fn($vars) => array_merge($vars, ['loan_car_id']));
+    public function registerMetaBoxes() {
+        add_meta_box('carDetailsBox', 'Car Details', [$this, 'renderCarMetaBox'], 'car', 'normal', 'default');
+        add_meta_box('loanRequestBox', 'Loan Request Details', [$this, 'renderLoanRequestMetaBox'], 'loan_request', 'normal', 'default');
+    }
 
-function portalIsCarLoaned($car_id): bool {
-    $now = current_time('Y-m-d');
-    $args = [
-        'post_type'  => 'loan_request',
-        'post_status'=> 'publish',
-        'meta_query' => [
-            'relation' => 'AND',
-            ['key' => 'car_id', 'value' => $car_id],
-            ['key' => 'status', 'value' => 'approved'],
-            ['key' => 'loan_start', 'value' => $now, 'compare' => '<='],
-            ['key' => 'loan_end', 'value' => $now, 'compare' => '>='],
-        ],
-    ];
-    return (new WP_Query($args))->have_posts();
-}
+    public function renderCarMetaBox($post) {
+        $price = get_post_meta($post->ID, 'price', true);
+        $year = get_post_meta($post->ID, 'year', true);
+        $mileage = get_post_meta($post->ID, 'mileage', true);
+        $engine = get_post_meta($post->ID, 'engine', true);
+        $loanAmount = get_post_meta($post->ID, 'loanAmount', true);
+        $isLoaned = get_post_meta($post->ID, 'isLoaned', true);
 
-add_action('template_redirect', function () {
-    $loanCarId = get_query_var('loan_car_id');
-    if (!$loanCarId) return;
+        include PLUGIN_TEMPLATE_PATH . 'cars/carDetailsBoxForm.php';
+    }
 
-    $car = get_post($loanCarId);
-    if (!$car || $car->post_type !== 'car') wp_die('Car not found.');
-    if (portalIsCarLoaned($loanCarId)) wp_die('Sorry, this car is currently loaned.');
+    public function saveCarMeta($postId) {
+        if (array_key_exists('price', $_POST)) update_post_meta($postId, 'price', $_POST['price']);
+        if (array_key_exists('year', $_POST)) update_post_meta($postId, 'year', $_POST['year']);
+        if (array_key_exists('mileage', $_POST)) update_post_meta($postId, 'mileage', $_POST['mileage']);
+        if (array_key_exists('engine', $_POST)) update_post_meta($postId, 'engine', $_POST['engine']);
+        if (array_key_exists('loanAmount', $_POST)) update_post_meta($postId, 'loanAmount', $_POST['loanAmount']);
+        update_post_meta($postId, 'isLoaned', isset($_POST['isLoaned']));
+    }
 
-    // Handle form submission
-    if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['loanSubmit'])) {
-        if (!is_user_logged_in()) wp_die('You must be logged in to request a loan.');
-        $user = wp_get_current_user();
+    public function renderLoanRequestMetaBox($post) {
+        $userId = get_post_meta($post->ID, 'userId', true);
+        $carId = get_post_meta($post->ID, 'carId', true);
+        $phone = get_post_meta($post->ID, 'phone', true);
+        $start = get_post_meta($post->ID, 'loanStart', true);
+        $end = get_post_meta($post->ID, 'loanEnd', true);
+        $status = get_post_meta($post->ID, 'status', true) ?: 'pending';
+        $notes = get_post_meta($post->ID, 'notes', true);
+        $statuses = ['pending' => 'Pending', 'approved' => 'Approved', 'rejected' => 'Rejected'];
 
-        $loanStart = sanitize_text_field($_POST['loanStart']);
-        $loanEnd   = sanitize_text_field($_POST['loanEnd']);
-        $loanNotes = sanitize_textarea_field($_POST['loanNotes']);
+        include PLUGIN_TEMPLATE_PATH . 'cars/loanRequestBoxForm.php';
+    }
 
-        $carMeta = getCarDetails($loanCarId);
+    public function saveLoanRequestMeta($postId) {
+        if (isset($_POST['loanStatus'])) {
+            $status = sanitize_text_field($_POST['loanStatus']);
+            update_post_meta($postId, 'status', $status);
 
-        $requestId = wp_insert_post([
-            'post_type'   => 'loan_request',
-            'post_title'  => 'Loan Request - ' . $carMeta['title'],
+            $carId = get_post_meta($postId, 'carId', true);
+            if ($carId) {
+                update_post_meta($carId, 'isLoaned', $status === 'approved');
+            }
+        }
+    }
+
+    public function addQueryVars($vars) {
+        $vars[] = 'loan_car_id';
+        return $vars;
+    }
+
+    public function portalIsCarLoaned($carId): bool {
+        $tomorrow = date('Y-m-d', strtotime('+1 day', current_time('timestamp')));
+        $args = [
+            'post_type' => 'loan_request',
             'post_status' => 'publish',
-            'meta_input'  => [
-                'userId'     => $user->ID,
-                'carId'      => $loanCarId,
-                'loanStart'  => $loanStart,
-                'loanEnd'    => $loanEnd,
-                'notes'      => $loanNotes,
-                'status'     => 'pending',
-                'price'      => $carMeta['price'],
-                'loanAmount' => $carMeta['loanAmount'],
+            'meta_query' => [
+                'relation' => 'AND',
+                ['key' => 'carId', 'value' => $carId],
+                ['key' => 'status', 'value' => 'approved'],
+                ['key' => 'loanStart', 'value' => $tomorrow, 'compare' => '<='],
             ],
-        ]);
+            'posts_per_page' => 1,
+        ];
 
-        // Send email to admin
-        $adminEmail = get_option('admin_email');
-        $message = sprintf(
-            "A new loan request has been submitted by %s for car \"%s\".\nStart: %s\nEnd: %s\nView Request: %s",
-            $user->display_name,
-            $carMeta['title'],
-            $loanStart,
-            $loanEnd,
-            admin_url('post.php?post=' . $requestId . '&action=edit')
-        );
-        wp_mail($adminEmail, 'New Car Loan Request', $message);
+        $query = new \WP_Query($args);
+        return $query->have_posts();
+    }
 
-        wp_redirect(add_query_arg('success', '1', get_permalink($loanCarId)));
+    public function getCarDetails($carId) {
+        $fields = ['price', 'year', 'mileage', 'engine', 'loanAmount', 'isLoaned'];
+        $fields = apply_filters('carDetailFields', $fields);
+        $meta = [];
+        foreach ($fields as $field) {
+            $meta[$field] = get_post_meta($carId, $field, true);
+        }
+
+        $meta['title'] = get_the_title($carId);
+
+        return apply_filters('carDetailsMeta', $meta, $carId);
+    }
+
+    public function handleLoanFormSubmission() {
+        $loanCarId = get_query_var('loan_car_id');
+        if (!$loanCarId) return;
+
+        $car = get_post($loanCarId);
+        if (!$car || $car->post_type !== 'car') wp_die('Car not found.');
+        if ($this->portalIsCarLoaned($loanCarId)) wp_die('Sorry, this car is currently loaned.');
+
+        if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['loanSubmit'])) {
+            if (!is_user_logged_in()) wp_die('You must be logged in to request a loan.');
+
+            $user = wp_get_current_user();
+            $loanStart = sanitize_text_field($_POST['loanStart']);
+            $loanEnd = sanitize_text_field($_POST['loanEnd']);
+            if ($loanEnd < $loanStart) wp_die('Loan end date cannot be earlier than start date.');
+            $loanNotes = sanitize_textarea_field($_POST['loanNotes']);
+            $loanPhone = sanitize_text_field($_POST['loanPhone']);
+            $carMeta = $this->getCarDetails($loanCarId);
+
+            $requestId = wp_insert_post([
+                'post_type' => 'loan_request',
+                'post_title' => 'Loan Request - ' . $carMeta['title'],
+                'post_status' => 'publish',
+                'meta_input' => [
+                    'userId' => $user->ID,
+                    'carId' => $loanCarId,
+                    'loanStart' => $loanStart,
+                    'loanEnd' => $loanEnd,
+                    'notes' => $loanNotes,
+                    'phone' => $loanPhone,
+                    'status' => 'pending',
+                    'price' => $carMeta['price'],
+                    'loanAmount' => $carMeta['loanAmount'],
+                ],
+            ]);
+
+            $adminEmail = get_option('admin_email');
+            wp_mail($adminEmail, 'New Car Loan Request', sprintf(
+                "A new loan request has been submitted by %s for car \"%s\".\nStart: %s\nEnd: %s\nView Request: %s",
+                $user->display_name,
+                $carMeta['title'],
+                $loanStart,
+                $loanEnd,
+                admin_url('post.php?post=' . $requestId . '&action=edit')
+            ));
+
+            wp_redirect(add_query_arg('success', '1', get_permalink($loanCarId)));
+            exit;
+        }
+
+        $template = PLUGIN_TEMPLATE_PATH . 'cars/carLoanForm.php';
+        if (file_exists($template)) {
+            $args = [
+                'carTitle' => $car->post_title,
+                'carId' => $loanCarId,
+            ];
+            include $template;
+        } else {
+            echo '<h1>' . esc_html($car->post_title) . '</h1>';
+            echo '<p>Template "templates/cars/carLoanForm.php" not found.</p>';
+        }
+
         exit;
     }
 
-    // Load template file with variables
-    $args = [
-        'carTitle' => $car->post_title,
-        'carId'    => $loanCarId,
-    ];
-
-    $template = PLUGIN_TEMPLATE_PATH .'cars/carLoanForm.php' ;
-    if (file_exists($template)) {
-        include $template;
-    } else {
-        echo '<h1>' . esc_html($car->post_title) . '</h1>';
-        echo '<p>Template "templates/cars/carLoanForm.php" not found.</p>';
+    public function displayLoanButton($content) {
+        if (get_post_type() === 'car' && is_singular('car')) {
+            $carId = get_the_ID();
+            if (!$this->portalIsCarLoaned($carId)) {
+                $url = home_url("/loan-car/{$carId}/");
+                $content .= '<p><a href="' . esc_url($url) . '" class="button loan-button">Loan this Car</a></p>';
+            } else {
+                $content .= '<p><strong>This car is currently loaned.</strong></p>';
+            }
+        }
+        return $content;
     }
 
-    exit;
-});
+    public function addLoanRequestColumns($columns) {
+        $newColumns = [];
+        foreach ($columns as $key => $label) {
+            $newColumns[$key] = $label;
+            if ($key === 'title') {
+                $newColumns['request_user'] = 'Requested By';
+                $newColumns['loan_actions'] = 'Actions';
+            }
+        }
+        return $newColumns;
+    }
 
+    public function renderLoanRequestColumns($column, $postId) {
+        if ($column === 'request_user') {
+            $userId = get_post_meta($postId, 'userId', true);
+            if ($userId) {
+                $user = get_userdata($userId);
+                echo esc_html($user ? $user->display_name : 'Unknown');
+            } else {
+                echo '—';
+            }
+        }
 
-add_filter('the_content', function ($content) {
-    if (get_post_type() === 'car' && is_singular('car')) {
-        $car_id = get_the_ID();
-        if (!portalIsCarLoaned($car_id)) {
-            $url = home_url("/loan-car/{$car_id}/");
-            $content .= '<p><a href="' . esc_url($url) . '" class="button loan-button" style="background:#0073aa;color:white;padding:8px 14px;border-radius:4px;text-decoration:none;">🚗 Loan this Car</a></p>';
-        } else {
-            $content .= '<p><strong>🚫 This car is currently loaned.</strong></p>';
+        if ($column === 'loan_actions') {
+            $status = get_post_meta($postId, 'status', true);
+            $approveUrl = wp_nonce_url(admin_url('admin-post.php?action=update_loan_request_status&status=approved&post=' . $postId), 'update_loan_status');
+            $rejectUrl = wp_nonce_url(admin_url('admin-post.php?action=update_loan_request_status&status=rejected&post=' . $postId), 'update_loan_status');
+
+            if ($status === 'pending') {
+                echo '<a href="' . esc_url($approveUrl) . '" class="button button-small">Approve</a> ';
+                echo '<a href="' . esc_url($rejectUrl) . '" class="button button-small">Reject</a>';
+            } else {
+                echo '<strong>' . ucfirst($status) . '</strong>';
+            }
         }
     }
-    return $content;
-});
 
-add_action('add_meta_boxes', function () {
-    add_meta_box('loanRequestBox', 'Loan Request Details', function ($post) {
-        $user_id = get_post_meta($post->ID, 'user_id', true);
-        $car_id  = get_post_meta($post->ID, 'car_id', true);
-        $start   = get_post_meta($post->ID, 'loan_start', true);
-        $end     = get_post_meta($post->ID, 'loan_end', true);
-        $status  = get_post_meta($post->ID, 'status', true) ?: 'pending';
-        $notes   = get_post_meta($post->ID, 'notes', true);
+    public function handleLoanStatusAction() {
+        if (!current_user_can('edit_posts') || !check_admin_referer('update_loan_status')) {
+            wp_die('Unauthorized action.');
+        }
 
-        $statuses = ['pending' => 'Pending', 'approved' => 'Approved', 'rejected' => 'Rejected'];
-        ?>
-        <p><strong>User:</strong> <?= esc_html(get_userdata($user_id)->display_name ?? 'Unknown'); ?></p>
-        <p><strong>Car:</strong> <?= esc_html(get_the_title($car_id)); ?></p>
-        <p><strong>Start:</strong> <?= esc_html($start); ?></p>
-        <p><strong>End:</strong> <?= esc_html($end); ?></p>
-        <p><strong>Notes:</strong> <?= nl2br(esc_html($notes)); ?></p>
-        <hr>
-        <p><label>Status:
-            <select name="loan_status">
-                <?php foreach ($statuses as $key => $label): ?>
-                    <option value="<?= esc_attr($key); ?>" <?= selected($status, $key, false); ?>><?= esc_html($label); ?></option>
-                <?php endforeach; ?>
-            </select>
-        </label></p>
-        <?php
-    }, 'loan_request', 'normal', 'default');
-});
+        $postId = intval($_GET['post']);
+        $status = sanitize_text_field($_GET['status']);
 
-add_action('save_post_loan_request', function ($post_id) {
-    if (isset($_POST['loan_status'])) {
-        update_post_meta($post_id, 'status', sanitize_text_field($_POST['loan_status']));
+        if ($postId && in_array($status, ['approved', 'rejected'], true)) {
+            update_post_meta($postId, 'status', $status);
+
+            $carId = get_post_meta($postId, 'carId', true);
+            if ($carId) {
+                update_post_meta($carId, 'isLoaned', $status === 'approved');
+            }
+        }
+
+        wp_redirect(wp_get_referer());
+        exit;
     }
-});
+
+    
+}
+
+new CarLoanManager();
