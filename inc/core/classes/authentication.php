@@ -1,5 +1,5 @@
 <?php
-namespace PortalNetwork\Core\Classes;
+namespace PortalAddons\Core\Classes;
 
 class portalAuthentication {
 

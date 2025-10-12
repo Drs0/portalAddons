@@ -38,7 +38,7 @@ add_filter('plugin_action_links_' . plugin_basename(__FILE__), function($links) 
 
 include PLUGIN_PATH . 'inc/hooks.php';
 
-use PortalNetwork\Core\Classes\portalAuthentication;
+use PortalAddons\Core\Classes\portalAuthentication;
 
 add_action('plugins_loaded', function () {
     new portalAuthentication();

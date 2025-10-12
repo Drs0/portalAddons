@@ -1,28 +1,29 @@
 <?php
+use PortalAddons\Core\Classes\PortalOption;
+
 add_action('admin_menu', function() {
-    add_menu_page(
-        __('Portal Addons Settings', 'portal-addons'),
-        __('Portal Addons', 'portal-addons'),
-        'manage_options',
-        'portalAddonsSettings',
-        'portalAddonsSettingsPage',
-        'dashicons-hammer',
-        100
-    );
-
-    add_submenu_page(
-        'portalAddonsSettings',
-        __('Import/Export', 'portal-addons'),
-        __('Import/Export', 'portal-addons'),
-        'manage_options',
-        'portalAddonsImportExport',
-        'portalAddonsImportExportPage'
-    );
+    PortalOption::menuPageRegistrar([
+        'menu' => true,
+        'pageTitle' => __('Portal Addons Settings', 'portal-addons'),
+        'menuTitle' =>  __('Portal Addons', 'portal-addons'),
+        'menuSlug' => 'portalAddonsSettings',
+        'callback' => function() {
+            PortalOption::renderOptionsHtml([
+                'filterName' => 'portalAddonsSettings',
+                'optionGroup' => 'portalAddonsSettings',
+                'pageTitle' => __('Portal Addons Settings', 'portal-addons'),
+            ]);
+        },
+        'iconUrl' => 'dashicons-hammer',
+        'position' => 100,
+        'subMenu' => [
+            'pageTitle' => __('Import/Export', 'portal-addons'),
+            'menuTitle' => __('Import/Export', 'portal-addons'),
+            'menuSlug' => 'portalAddonsImportExport',
+            'callback' => 'portalAddonsImportExportPage'
+        ]
+    ]);
 });
-
-function portalAddonsSettingsPage() {
-    include PLUGIN_PATH . 'templates/settings/portalAddonsSettingsPage.php';
-}
 
 function portalAddonsImportExportPage() {
     include PLUGIN_PATH . 'templates/settings/portalAddonsImportExportPage.php';
@@ -140,7 +141,7 @@ function portalAddonsImportPostType($post_type, $filePath) {
             'post_content' => isset($item['post_content']) ? wp_kses_post($item['post_content']) : '',
             'post_excerpt' => isset($item['post_excerpt']) ? sanitize_text_field($item['post_excerpt']) : '',
             'post_status'  => 'publish',
-            'post_type'    => $post_type,  // <-- Use the selected post type here!
+            'post_type'    => $post_type,
         ];
 
         $postId = wp_insert_post($newPost);
@@ -159,4 +160,3 @@ function portalAddonsImportPostType($post_type, $filePath) {
         echo '<div class="notice notice-success"><p>CSV Import completed successfully.</p></div>';
     });
 }
-
