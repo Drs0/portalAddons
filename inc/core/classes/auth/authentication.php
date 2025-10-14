@@ -4,19 +4,22 @@ namespace PortalAddons\Core\Classes;
 class portalAuthentication {
 
     public function __construct() {
-        // Add rewrite rules and custom route handlers
-        add_action('init', [$this, 'addRewriteRules']);
+
+        add_action('init', [$this, 'handleInit']);
+
         add_filter('query_vars', [$this, 'addQueryVars']);
         add_action('template_redirect', [$this, 'handleCustomRoutes']);
-
-        // Handle login and registration and lost password
-        add_action('init', [$this, 'handleLogin']);
-        add_action('init', [$this, 'handleRegistration']);
-        add_action('init', [$this, 'handleLostPassword']);
 
         // Restrict admin area and admin bar
         add_action('admin_init', [$this, 'restrictAdminAccess'], 1);
         add_filter('show_admin_bar', [$this, 'maybeHideAdminBar']);
+    }
+
+    public function handleInit(){
+        $this->addRewriteRules();
+        $this->handleLogin();
+        $this->handleRegistration();
+        $this->handleLostPassword();
     }
 
     /**

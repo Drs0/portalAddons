@@ -173,4 +173,11 @@ class PortalOption
         include $path;
     }
 
+    public static function activateOptions($args){
+        if(empty($args) || !is_array($args) || empty($args['optionName'])) return;
+        if(get_option($args['optionName']) && file_exists(PLUGIN_PATH . $args['optionPath'])){
+            require_once PLUGIN_PATH . $args['optionPath'];
+        }
+    }
+
 }

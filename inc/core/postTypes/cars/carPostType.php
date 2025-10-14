@@ -39,11 +39,11 @@ class CarLoanManager {
         add_action('save_post_car', [$this, 'saveCarMeta']);
         add_action('save_post_loan_request', [$this, 'saveLoanRequestMeta']);
         add_action('template_redirect', [$this, 'handleLoanFormSubmission']);
+        add_action('manage_loan_request_posts_custom_column', [$this, 'renderLoanRequestColumns'], 10, 2);
+        add_action('admin_post_update_loan_request_status', [$this, 'handleLoanStatusAction']);
         add_filter('query_vars', [$this, 'addQueryVars']);
         add_filter('the_content', [$this, 'displayLoanButton']);
         add_filter('manage_loan_request_posts_columns', [$this, 'addLoanRequestColumns']);
-        add_action('manage_loan_request_posts_custom_column', [$this, 'renderLoanRequestColumns'], 10, 2);
-        add_action('admin_post_update_loan_request_status', [$this, 'handleLoanStatusAction']);
     }
 
     public static function instance() {
@@ -213,7 +213,7 @@ class CarLoanManager {
             $carId = get_the_ID();
             if (!$this->portalIsCarLoaned($carId)) {
                 $url = home_url("/loan-car/{$carId}/");
-                $content .= '<p><a href="' . esc_url($url) . '" class="button loan-button">Loan this Car</a></p>';
+                $content .= '<p class="portal-button"><a href="' . esc_url($url) . '" class="portal-button button-loan">Loan this Car</a></p>';
             } else {
                 $content .= '<p><strong>This car is currently loaned.</strong></p>';
             }

@@ -4,7 +4,7 @@ function fmEnqueueScripts() // fm as Football Matches
 {
     wp_enqueue_script(
         'football-matches-js',
-        PLUGIN_URL . 'assets/javascripts/football-matches.js',
+        PLUGIN_URL . 'assets/javascripts/football/football-matches.js',
         array('jquery'),
         '1.0',
         true
@@ -17,7 +17,7 @@ function fmEnqueueScripts() // fm as Football Matches
 }
 
 function registerFormJs(){
-    wp_enqueue_script('register-form-js', PLUGIN_URL . 'assets/javascripts/auth.js', array('jquery', 'sweetalert-js'), '1.0', true );
+    wp_enqueue_script('register-form-js', PLUGIN_URL . 'assets/javascripts/auth/auth.js', array('jquery', 'sweetalert-js'), '1.0', true );
 }
 
 function sweetAlertJs(){
