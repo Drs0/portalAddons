@@ -4,7 +4,7 @@ get_header();
 ?>
 <main class="car-loan-form">
     <h1>Loan <?= esc_html($carTitle); ?></h1>
-    <?php if (is_user_logged_in()): ?>
+    <?php if (is_user_logged_in() || apply_filters('userShouldNotBeRegistered', true)): ?>
         <form method="POST">
             <p>
                 <label for="loanPhone">Phone Number:</label><br>
