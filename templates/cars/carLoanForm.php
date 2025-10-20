@@ -7,6 +7,14 @@ get_header();
     <?php if (is_user_logged_in() || apply_filters('userShouldNotBeRegistered', true)): ?>
         <form method="POST">
             <p>
+                <label for="loanFirstName">First Name:</label><br>
+                <input type="text" name="loanFirstName" id="loanFirstName" required>
+            </p>
+            <p>
+                <label for="loanLastName">Last Name:</label><br>
+                <input type="text" name="loanLastName" id="loanLastName" required>
+            </p>
+            <p>
                 <label for="loanPhone">Phone Number:</label><br>
                 <input type="tel" name="loanPhone" id="loanPhone" required>
             </p>

@@ -152,45 +152,62 @@ class CarLoanManager {
         if ($this->portalIsCarLoaned($loanCarId)) wp_die('Sorry, this car is currently loaned.');
 
         if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['loanSubmit'])) {
-            if (!is_user_logged_in()) wp_die('You must be logged in to request a loan.');
+            $allowGuests = apply_filters('userShouldNotBeRegistered', true);
+            if (!is_user_logged_in() && !$allowGuests) wp_die('You must be logged in to request a loan.');
 
-            $user = wp_get_current_user();
-            $loanStart = sanitize_text_field($_POST['loanStart']);
-            $loanEnd = sanitize_text_field($_POST['loanEnd']);
-            if ($loanEnd < $loanStart) wp_die('Loan end date cannot be earlier than start date.');
-            $loanNotes = sanitize_textarea_field($_POST['loanNotes']);
-            $loanPhone = sanitize_text_field($_POST['loanPhone']);
-            $carMeta = $this->getCarDetails($loanCarId);
+                $loanFirstName = sanitize_text_field($_POST['loanFirstName'] ?? '');
+                $loanLastName  = sanitize_text_field($_POST['loanLastName'] ?? '');
+                $loanPhone     = sanitize_text_field($_POST['loanPhone'] ?? '');
+                $loanStart     = sanitize_text_field($_POST['loanStart'] ?? '');
+                $loanEnd       = sanitize_text_field($_POST['loanEnd'] ?? '');
+                $loanNotes     = sanitize_textarea_field($_POST['loanNotes'] ?? '');
 
-            $requestId = wp_insert_post([
-                'post_type' => 'loan_request',
-                'post_title' => 'Loan Request - ' . $carMeta['title'],
-                'post_status' => 'publish',
-                'meta_input' => [
-                    'userId' => $user->ID,
-                    'carId' => $loanCarId,
-                    'loanStart' => $loanStart,
-                    'loanEnd' => $loanEnd,
-                    'notes' => $loanNotes,
-                    'phone' => $loanPhone,
-                    'status' => 'pending',
-                    'price' => $carMeta['price'],
-                    'loanAmount' => $carMeta['loanAmount'],
-                ],
-            ]);
+                if (empty($loanFirstName) || empty($loanLastName) || empty($loanPhone)) {
+                    wp_die('Please fill all required fields.');
+                }
 
-            $adminEmail = get_option('admin_email');
-            wp_mail($adminEmail, 'New Car Loan Request', sprintf(
-                "A new loan request has been submitted by %s for car \"%s\".\nStart: %s\nEnd: %s\nView Request: %s",
-                $user->display_name,
-                $carMeta['title'],
-                $loanStart,
-                $loanEnd,
-                admin_url('post.php?post=' . $requestId . '&action=edit')
-            ));
+                if ($loanEnd < $loanStart) {
+                    wp_die('Loan end date cannot be earlier than start date.');
+                }
 
-            wp_redirect(add_query_arg('success', '1', get_permalink($loanCarId)));
-            exit;
+                $carMeta = $this->getCarDetails($loanCarId);
+
+                $user = is_user_logged_in() ? wp_get_current_user() : null;
+                $userId = $user ? $user->ID : 0;
+                $displayName = $user ? $user->display_name : $loanFirstName . ' ' . $loanLastName;
+
+                $requestId = wp_insert_post([
+                    'post_type' => 'loan_request',
+                    'post_title' => 'Loan Request - ' . $carMeta['title'],
+                    'post_status' => 'publish',
+                    'meta_input' => [
+                        'userId' => $userId,
+                        'carId' => $loanCarId,
+                        'loanStart' => $loanStart,
+                        'loanEnd' => $loanEnd,
+                        'notes' => $loanNotes,
+                        'phone' => $loanPhone,
+                        'firstName' => $loanFirstName,
+                        'lastName' => $loanLastName,
+                        'status' => 'pending',
+                        'price' => $carMeta['price'],
+                        'loanAmount' => $carMeta['loanAmount'],
+                    ],
+                ]);
+
+                $adminEmail = get_option('admin_email');
+                wp_mail($adminEmail, 'New Car Loan Request', sprintf(
+                    "A new loan request has been submitted by %s for car \"%s\".\nStart: %s\nEnd: %s\nPhone: %s\nView Request: %s",
+                    $displayName,
+                    $carMeta['title'],
+                    $loanStart,
+                    $loanEnd,
+                    $loanPhone,
+                    admin_url('post.php?post=' . $requestId . '&action=edit')
+                ));
+
+                wp_redirect(add_query_arg('success', '1', get_permalink($loanCarId)));
+                exit;
         }
 
         $template = PLUGIN_TEMPLATE_PATH . 'cars/carLoanForm.php';
@@ -236,9 +253,14 @@ class CarLoanManager {
     public function renderLoanRequestColumns($column, $postId) {
         if ($column === 'request_user') {
             $userId = get_post_meta($postId, 'userId', true);
+            $firstName = get_post_meta($postId, 'firstName', true);
+            $lastName  = get_post_meta($postId, 'lastName', true);
+
             if ($userId) {
                 $user = get_userdata($userId);
                 echo esc_html($user ? $user->display_name : 'Unknown');
+            } elseif ($firstName || $lastName) {
+                echo esc_html(trim("$firstName $lastName"));
             } else {
                 echo '—';
             }
