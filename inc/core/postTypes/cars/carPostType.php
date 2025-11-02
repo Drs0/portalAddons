@@ -99,10 +99,16 @@ class CarLoanManager {
         if (isset($_POST['loanStatus'])) {
             $status = sanitize_text_field($_POST['loanStatus']);
             update_post_meta($postId, 'status', $status);
-
             $carId = get_post_meta($postId, 'carId', true);
-            if ($carId) {
-                update_post_meta($carId, 'isLoaned', $status === 'approved');
+
+            if (!$carId) return; 
+            
+            update_post_meta($carId, 'isLoaned', $status === 'approved');
+
+            if ($status === 'approved') {
+                $loanStart = get_post_meta($postId, 'loanStart', true);
+                $loanEnd   = get_post_meta($postId, 'loanEnd', true);
+                $this->updateCarLoanStats($carId, $loanStart, $loanEnd);
             }
         }
     }
@@ -301,6 +307,20 @@ class CarLoanManager {
         exit;
     }
 
+    private function updateCarLoanStats($carId, $loanStart, $loanEnd){
+        $loanCount = (int) get_post_meta($carId, 'loanCount', true);
+        $loanCount++;
+
+        update_post_meta($carId, 'loanCount', $loanCount);
+        update_post_meta($carId, 'lastLoanDate', current_time('mysql'));
+
+        if ($loanStart && $loanEnd) {
+            $days = (strtotime($loanEnd) - strtotime($loanStart)) / DAY_IN_SECONDS;
+            $days = max(0, $days);
+            $totalDays = (float) get_post_meta($carId, 'totalLoanDays', true);
+            update_post_meta($carId, 'totalLoanDays', $totalDays + $days);
+        }
+    }
     
 }
 
